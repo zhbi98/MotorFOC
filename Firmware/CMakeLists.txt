@@ -14,7 +14,7 @@ set(SIZE arm-none-eabi-size)
 # skip compiler checks
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 
-project(StepDriver C CXX ASM)
+project(MotorKit C CXX ASM)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD 11)
 
@@ -46,45 +46,29 @@ endif ()
 include_directories(
     ./
     ${CMAKE_SOURCE_DIR}/drivers/CMSIS/Include
-    ${CMAKE_SOURCE_DIR}/drivers/CMSIS/Device/ST/STM32F1xx/Include
-    ${CMAKE_SOURCE_DIR}/drivers/STM32F1xx_HAL_Driver/Inc
-    ${CMAKE_SOURCE_DIR}/drivers/STM32F1xx_HAL_Driver/Inc/Legacy
+    ${CMAKE_SOURCE_DIR}/drivers/CMSIS/Device/ST/STM32F4xx/Include
+    ${CMAKE_SOURCE_DIR}/drivers/STM32F4xx_HAL_Driver/Inc
+    ${CMAKE_SOURCE_DIR}/drivers/STM32F4xx_HAL_Driver/Inc/Legacy
     ${CMAKE_SOURCE_DIR}/main
-    ${CMAKE_SOURCE_DIR}/led
-    ${CMAKE_SOURCE_DIR}/key
-    ${CMAKE_SOURCE_DIR}/mt6816
-    ${CMAKE_SOURCE_DIR}/tb67h450
-    ${CMAKE_SOURCE_DIR}/motor
-    ${CMAKE_SOURCE_DIR}/flash
-    ${CMAKE_SOURCE_DIR}/rs485
-    ${CMAKE_SOURCE_DIR}/can
     ${CMAKE_SOURCE_DIR}/modbus
     ${CMAKE_SOURCE_DIR}/utils
 )
-add_definitions(-DUSE_HAL_DRIVER -D__MICROLIB -DSTM32F1 -DSTM32F1xx -DSTM32F103xB)
+add_definitions(-DUSE_HAL_DRIVER -D__MICROLIB -DSTM32F4 -DSTM32F4xx -DSTM32F405xx)
 
-aux_source_directory(${CMAKE_SOURCE_DIR}/drivers/STM32F1xx_HAL_Driver/Src HAL_DRIVER)
-aux_source_directory(${CMAKE_SOURCE_DIR}/drivers/CMSIS/Device/ST/STM32F1xx/Source/Templates SYSTEM)
+aux_source_directory(${CMAKE_SOURCE_DIR}/drivers/STM32F4xx_HAL_Driver/Src HAL_DRIVER)
+aux_source_directory(${CMAKE_SOURCE_DIR}/drivers/CMSIS/Device/ST/STM32F4xx/Source/Templates SYSTEM)
 aux_source_directory(${CMAKE_SOURCE_DIR}/main MAIN)
-aux_source_directory(${CMAKE_SOURCE_DIR}/led LED)
-aux_source_directory(${CMAKE_SOURCE_DIR}/key KEY)
-aux_source_directory(${CMAKE_SOURCE_DIR}/mt6816 MT6816)
-aux_source_directory(${CMAKE_SOURCE_DIR}/tb67h450 TB67H450)
-aux_source_directory(${CMAKE_SOURCE_DIR}/motor MOTOR)
-aux_source_directory(${CMAKE_SOURCE_DIR}/flash FLASH)
-aux_source_directory(${CMAKE_SOURCE_DIR}/rs485 RS485)
-aux_source_directory(${CMAKE_SOURCE_DIR}/can CAN)
 aux_source_directory(${CMAKE_SOURCE_DIR}/modbus MODBUS)
 aux_source_directory(${CMAKE_SOURCE_DIR}/utils UTILS)
 
-set(STARTUP       ${CMAKE_SOURCE_DIR}/drivers/CMSIS/Device/ST/STM32F1xx/Source/Templates/gcc/startup_stm32f103xb.s)
-set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/drivers/CMSIS/Device/ST/STM32F1xx/Source/Templates/gcc/linker/STM32F103XB_FLASH.ld)
+set(STARTUP       ${CMAKE_SOURCE_DIR}/drivers/CMSIS/Device/ST/STM32F4xx/Source/Templates/gcc/startup_stm32f405xx.s)
+set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/STM32F405RGTx_FLASH.ld)
 
 add_link_options(-Wl,-gc-sections,--print-memory-usage,-Map=${PROJECT_BINARY_DIR}/${PROJECT_NAME}.map)
 add_link_options(-mcpu=cortex-m3 -mthumb -mthumb-interwork)
 add_link_options(-T ${LINKER_SCRIPT})
 
-add_executable(${PROJECT_NAME}.elf ${HAL_DRIVER} ${SYSTEM} ${MAIN} ${LED} ${KEY} ${MT6816} ${TB67H450} ${MOTOR} ${FLASH} ${RS485} ${CAN} ${MODBUS} ${STARTUP} ${UTILS} ${LINKER_SCRIPT})
+add_executable(${PROJECT_NAME}.elf ${HAL_DRIVER} ${SYSTEM} ${MAIN} ${MODBUS} ${STARTUP} ${UTILS} ${LINKER_SCRIPT})
 
 set(HEX_FILE ${PROJECT_BINARY_DIR}/${PROJECT_NAME}.hex)
 set(BIN_FILE ${PROJECT_BINARY_DIR}/${PROJECT_NAME}.bin)
