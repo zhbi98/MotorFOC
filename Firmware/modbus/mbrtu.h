@@ -1,14 +1,25 @@
+/**
+ * @file mbrtu.h
+ *
+ */
 
 #ifndef __MBRTU_H__
 #define __MBRTU_H__
 
+/*********************
+ *      INCLUDES
+ *********************/
+
 #include <stdbool.h>
 #include <string.h>
+#include <stdint.h>
 #include "crc16.h"
 #include "mbtimer.h"
 #include "mb.h"
-/*#include "usart.h"*/
-/*#include "rs485.h"*/
+
+/*********************
+ *      DEFINES
+ *********************/
 
 /**
  * Constants which defines the format of a modbus frame. The example is
@@ -31,41 +42,69 @@
  * (6)  ... CRC/LRC = 2
  */
 
-#define RTU_BUF_MIN 4
-#define RTU_BUF_MAX 256
+#define RTU_BUF_MIN 4U
+#define RTU_BUF_MAX 256U
 
-#define BROADCAST_ADDRESS 0
-#define ADDRESS_MIN 1
-#define ADDRESS_MAX 247
+#define BROADCAST_ADDRESS 0U
+#define ADDRESS_MIN 1U
+#define ADDRESS_MAX 247U
 
-#define SLAVE_ADDR_BYTE_SIZE 1
-#define FUNCODE_BYTE_SIZE 1
-#define CRC_BYTE_SIZE 2
+#define SLAVE_ADDR_BYTE_SIZE 1U
+#define FUNCODE_BYTE_SIZE 1U
+#define CRC_BYTE_SIZE 2U
 
-#define SLAVE_ADDR_INDEX 0
-#define FUN_CODE_INDEX 1
-#define PDU_DATA_INDEX 2
+#define SLAVE_ADDR_INDEX 0U
+#define FUN_CODE_INDEX 1U
+#define PDU_DATA_INDEX 2U
 
-typedef enum {
-    MB_STATE_INIT,
-    MB_STATE_IDLE,
-    MB_STATE_RECV,
-    MB_STATE_RECEIVEED,
-} MB_StateTypeDef;
+/**********************
+ *      TYPEDEFS
+ **********************/
 
-extern MB_StateTypeDef mbState;
+/**Description of a linked list*/
+enum {
+    MB_RX_INIT = 0,
+    MB_RX_IDLE,
+    MB_RX_RCV,
+    MB_RX_END,
+    MB_RX_ERR,
+};
 
-extern void MB_RtuModeInit(unsigned char slaveAddr, unsigned int baudRate);
-extern void MB_SetSlaveAddr(unsigned char slaveAddr);
-extern void MB_RtuSendBytes(unsigned char * buf, unsigned short len);
-extern void MB_RtuRecvBytes(unsigned char byte);
-extern unsigned char MB_RtuFrameValid();
-extern unsigned char MB_RtuSlaveAddrValid();
-extern unsigned char MB_RtuReadSlaveAddr();
-extern void MB_RtuReadPduDataFrame();
-extern unsigned char MB_RtuReadPduFunCode();
-extern void MB_RtuPduFieldDeal();
-extern void MB_RtuFunHandlers(unsigned char funCode, unsigned char * pduDataFrame, unsigned short * pduDataLen);
-extern void MB_RtuBuildSendFrames(unsigned char * pduDataFrame, unsigned short pduDataLen);
+typedef uint8_t mb_rx_state_t;
 
-#endif
+enum {
+    MB_TX_IDLE = 0, /**< Transmitter is in idle state*/
+    MB_TX_XMIT /**< Transmitter is in transfer state*/
+};
+
+typedef uint8_t mb_tx_state_t;
+
+enum {
+    MB_READY = 0,      /**< Startup finished.*/
+    MB_FRAME_RECEIVED, /**< Frame received.*/
+    MB_EXECUTE,        /**< Execute function.*/
+    MB_FRAME_SENT,     /**< Frame sent.*/
+    MB_END             /**< Work end.*/
+};
+
+typedef uint8_t mb_task_t;
+
+/**********************
+ * GLOBAL PROTOTYPES
+ **********************/
+
+void mb_rtu_mode_init(uint8_t slave_addr, uint32_t baud_rate);
+bool mb_rtu_set_slave_addr(uint8_t slave_addr);
+void mb_rtu_send_bytes(uint8_t * data_p, uint16_t len);
+void mb_rtu_recv_bytes(uint8_t byte);
+uint8_t mb_rtu_frame_valid();
+uint8_t mb_rtu_slave_addr_valid();
+uint8_t mb_rtu_read_slave_addr();
+void mb_rtu_read_pdu_data_frame();
+uint8_t mb_rtu_read_pdu_fun_code();
+void mb_rtu_pdu_field_deal();
+void mb_rtu_fun_handlers(uint8_t fun_code, uint8_t * pdu_data_frame_p, uint16_t * pdu_data_len);
+void mb_rtu_build_send_frames(uint8_t * pdu_data_frame, uint16_t pdu_data_len);
+void mb_rtu_T35_expired();
+
+#endif /*__MBRTU_H__*/

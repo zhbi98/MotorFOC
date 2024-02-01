@@ -1,42 +1,103 @@
+/**
+ * @file mbtimer.c
+ *
+ */
+
+/*********************
+ *      INCLUDES
+ *********************/
 
 #include "mbtimer.h"
 
-MBTimerTypeDef mbTimer;
+/*********************
+ *      DEFINES
+ *********************/
 
-void MB_TimerInit(unsigned int baudRate)
+#define MB_TIMEOUT_INVALID (65535U)
+
+/**********************
+ *  STATIC VARIABLES
+ **********************/
+
+static __IO uint32_t tick50us_inited;
+static __IO uint32_t tick50us_val;
+
+/**********************
+ *   GLOBAL FUNCTIONS
+ **********************/
+
+/**
+ * Initialize timer to set 3.5 character time according to the 
+ * communication baud rate and slave device baud rate.
+ * @param baud_rate slave device baud rate.
+ */
+void mb_timer_init(uint32_t baud_rate)
 {
-    mbTimer.tick50usCount = (baudRate > 19200) ? 35 : ((7UL * 220000UL) / (2UL * baudRate));
+    /**
+     * If baudrate > 19200 then we should use the fixed timer values
+     * t35 = 1750us. Otherwise t35 must be 3.5 times the character time.
+     */
+
+    uint32_t val = (
+        7UL * 220000UL
+    ) / (2UL * baud_rate);
+
+    uint32_t _val = (
+        baud_rate > 19200
+        ) ? 35 : val;
+
+    tick50us_inited = _val;
 }
 
-void MB_TimerReload()
+/**
+ * Overloading the 3.5 character time to restart the timer.
+ * For next frame interval control.
+ */
+void mb_timer_reload()
 {
-    mbTimer.tick50us = mbTimer.tick50usCount;
+    uint32_t val = tick50us_inited;
+    tick50us_val = val;
 }
 
-void MB_TimerEnable()
+/**
+ * Enable a 3.5 character frame interval timer.
+ * Ready to receive data frame.
+ */
+void mb_timer_enable()
 {
-    mbTimer.tick50us = mbTimer.tick50usCount;
+    uint32_t val = tick50us_inited;
+    tick50us_val = val;
 }
 
-void MB_TimerDisable()
+/**
+ * Disable a 3.5 character frame interval timer.
+ * A frame of data received, off the timer, ready to process the data.
+ */
+void mb_timer_disable()
 {
-    mbTimer.tick50us = MB_TIMEOUT_INVALID;
+    tick50us_val = \
+        MB_TIMEOUT_INVALID;
 }
 
-void MB_TimerUpdate()
+/**
+ * The frame interval timer updates the function, 
+ * placing the function into a timed interrupt function to execute.
+ */
+void mb_timer_tick_callback()
 {
-    if (mbTimer.tick50us == MB_TIMEOUT_INVALID)
+    if (tick50us_val == MB_TIMEOUT_INVALID)
         return;
 
-    mbTimer.tick50us -= 1;
-    if (mbTimer.tick50us > 0)
-        return;
+    /*A frame of data received, off the timer, 
+    ready to process the data*/
+    tick50us_val--;
 
-    mbTimer.tick50us = MB_TIMEOUT_INVALID;
+    if (tick50us_val > 0) return;
 
-    if (mbState == MB_STATE_INIT) {
-        mbState = MB_STATE_IDLE;
-    } else if (mbState == MB_STATE_RECV) {
-        mbState = MB_STATE_RECEIVEED;
-    }
+    /*tick50us_val = MB_TIMEOUT_INVALID;*/
+    mb_timer_disable();
+
+    /*The packet frame interval is up 
+    and the bus status update begins*/
+    mb_rtu_T35_expired();
 }

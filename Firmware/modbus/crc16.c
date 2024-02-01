@@ -1,5 +1,17 @@
+/**
+ * @file crc16.c
+ *
+ */
+
+/*********************
+ *      INCLUDES
+ *********************/
 
 #include "crc16.h"
+
+/**********************
+ *  STATIC VARIABLES
+ **********************/
 
 /* Table of CRC values for high-order byte */
 static const uint8_t table_crc_hi[] = {
@@ -47,18 +59,60 @@ static const uint8_t table_crc_lo[] = {
     0x41, 0x81, 0x80, 0x40
 };
 
-uint16_t crc16(uint8_t *buffer, uint16_t buffer_length)
-{
-    uint8_t crc_hi = 0xFF; /* high CRC byte initialized */
-    uint8_t crc_lo = 0xFF; /* low CRC byte initialized */
-    unsigned int i;        /* will index into CRC lookup */
+/**********************
+ *   GLOBAL FUNCTIONS
+ **********************/
 
-    /* pass through message buffer */
+/**
+ * The input byte data is combined with the CRC parameter table 
+ * to obtain a unique verify value.
+ * @param buffer Point to the data buffer area to be validated.
+ * @param buffer_length Length of data to be validated, 
+ * number of bytes.
+ * @return verify value.
+ */
+uint16_t crc16(uint8_t * buffer, 
+    uint16_t buffer_length)
+{
+    uint8_t crc_hi = 0xFF; /*high CRC byte initialized*/
+    uint8_t crc_lo = 0xFF; /*low CRC byte initialized*/
+    uint32_t i = 0;        /*will index into CRC lookup*/
+
+    /*pass through message buffer*/
     while (buffer_length--) {
-        i = crc_lo ^ *buffer++; /* calculate the CRC  */
+        i = crc_lo ^ *buffer++; /*calculate the CRC*/
         crc_lo = crc_hi ^ table_crc_hi[i];
         crc_hi = table_crc_lo[i];
     }
 
     return (crc_hi << 8 | crc_lo);
 }
+
+/* 
+ * FreeModbus Libary: A portable Modbus implementation for Modbus ASCII/RTU.
+ * Copyright (c) 2006-2018 Christian Walter <cwalter@embedded-solutions.at>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. The name of the author may not be used to endorse or promote products
+ *    derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */

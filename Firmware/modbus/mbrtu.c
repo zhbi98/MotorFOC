@@ -1,180 +1,455 @@
+/**
+ * @file mbrtu.c
+ *
+ */
 
+/*********************
+ *      INCLUDES
+ *********************/
+
+#include <assert.h>
 #include "mbrtu.h"
 
-unsigned char  rtuBuf[RTU_BUF_MAX] = {0};
-unsigned short rtuLen = 0;
+/*********************
+ *      DEFINES
+ *********************/
 
-unsigned char  initSlaveAddr = 0x01;
-unsigned char  recvSlaveAddr = 0x00;
-unsigned short recvFunCode   = 0x00;
+#define MB_SEND_BYTE(buf, len)
 
-unsigned char  pduData[RTU_BUF_MAX - 4];
-unsigned short dataLen;
+/**
+ * rs485_receive_disable(); \
+ * while (HAL_UART_Transmit( \
+ *         &Uart1Handle, \
+ *         buf, len, \
+ *         0XFFFF \
+ *     ) != HAL_OK \
+ * ); \
+ * rs485_receive_enable();
+ */
 
-MB_StateTypeDef mbState = MB_STATE_INIT;
+/**********************
+ *  STATIC VARIABLES
+ **********************/
 
-void MB_RtuModeInit(unsigned char slaveAddr, unsigned int baudRate)
+static uint8_t  rtu_buf[RTU_BUF_MAX] = {0};
+static uint16_t rtu_len = 0;
+
+static uint8_t  init_slave_addr = 0x01;
+static uint8_t  recv_slave_addr = 0x00;
+static uint16_t recv_fun_code   = 0x00;
+
+static uint8_t  pdu_data[RTU_BUF_MAX - 4];
+static uint16_t data_len = 0;
+
+static mb_rx_state_t mb_rx_state = MB_RX_INIT;
+static mb_tx_state_t mb_tx_state = MB_TX_IDLE;
+static mb_task_t mb_task = 0xFF;
+
+/**********************
+ *      TYPEDEFS
+ **********************/
+
+typedef mb_res_t (*req_opi_t)(uint8_t * pdu_data_frame_p, uint16_t * pdu_data_len);
+
+/**********************
+ *   GLOBAL FUNCTIONS
+ **********************/
+
+/**
+ * Initializes the slave device, sets the unique slave device address to which the 
+ * slave device belongs, and the device communication baud rate.
+ * @param slave_addr Unique slave device address.
+ * @param baud_rate Device communication baud rate.
+ */
+void mb_rtu_mode_init(uint8_t slave_addr, 
+    uint32_t baud_rate)
 {
-    if ((slaveAddr < ADDRESS_MIN) || (slaveAddr > ADDRESS_MAX))
+    if ((slave_addr < ADDRESS_MIN) || 
+        (slave_addr > ADDRESS_MAX))
         return;
 
-    initSlaveAddr = slaveAddr;
-    MB_TimerInit(baudRate);
+    init_slave_addr = slave_addr;
+    mb_timer_init(baud_rate);
 
-    mbState = MB_STATE_INIT;
-    MB_TimerEnable();
+    mb_rx_state = MB_RX_INIT;
+    mb_timer_enable();
 }
 
-void MB_SetSlaveAddr(unsigned char slaveAddr)
+/**
+ * Set the device from the device address, 
+ * generally used to temporarily change the address of the device.
+ * @param slave_addr Unique slave device address.
+ * @return Whether the settings take effect.
+ */
+bool mb_rtu_set_slave_addr(uint8_t slave_addr)
 {
-    if ((slaveAddr >= ADDRESS_MIN) && (slaveAddr <= ADDRESS_MAX))
-        initSlaveAddr = slaveAddr;
+    if ((slave_addr >= ADDRESS_MIN) && 
+        (slave_addr <= ADDRESS_MAX)
+    ) {
+        init_slave_addr = slave_addr;
+        return true;
+    }
+    return false;
 }
 
-void MB_RtuSendBytes(unsigned char * buf, unsigned short len)
+/**
+ * The realization of Modbus protocol data transmission.
+ * @param data_p Points to an area of the cached data.
+ * @param len Number of bytes in the frame of data.
+ */
+void mb_rtu_send_bytes(uint8_t * data_p, uint16_t len)
 {
-#if 0
-    rs485_receive_disable();
-    while (
-        HAL_UART_Transmit(
-            &Uart1Handle, buf, len, 0XFFFF
-        ) != HAL_OK
-    );
-    rs485_receive_enable();
-#endif
+    MB_SEND_BYTE(data_p, len);
 }
 
-void MB_RtuRecvBytes(unsigned char byte)
+/**
+ * The underlying interface of Modbus protocol data receiving is realized, 
+ * which is used in the interrupt of serial interface data receiving.
+ * @param byte Padding data byte by byte into a data frame buffer.
+ */
+void mb_rtu_recv_bytes(uint8_t byte)
 {
-    if ((mbState == MB_STATE_IDLE)) {
-        mbState = MB_STATE_RECV;
-        rtuLen = 0;
-        if (rtuLen < RTU_BUF_MAX) {
-            rtuBuf[rtuLen] = byte;
-            rtuLen++;
-            MB_TimerReload();
+    /*A new frame of data is received when the controller is idle*/
+    assert(mb_tx_state == MB_TX_IDLE);
+    
+    switch (mb_rx_state) {
+    /**
+     * If we have received a character in the init state we have to
+     * wait until the frame is finished.
+     */
+    case MB_RX_INIT:
+        mb_timer_enable();
+        break;
+
+    /**
+     * In the error state we wait until all characters in the
+     * damaged frame are transmitted.
+     */
+    case MB_RX_ERR:
+        mb_timer_enable();
+        break;
+
+    /**
+     * In the idle state we wait for a new character. If a character
+     * is received the t1.5 and t3.5 timers are started and the
+     * receiver is in the state STATE_RX_RECEIVCE.
+     */
+    case MB_RX_IDLE:
+        rtu_len = 0; /*Empty the byte count in preparation for the next frame of data*/
+        mb_rx_state = MB_RX_RCV;
+        /*Padding data byte by byte into a data frame buffer*/
+        if (rtu_len < RTU_BUF_MAX) {
+            rtu_buf[rtu_len] = byte;
+            rtu_len++;
+            mb_timer_reload();
         }
-    } else if (mbState == MB_STATE_RECV) {
-        if (rtuLen < RTU_BUF_MAX) {
-            rtuBuf[rtuLen] = byte;
-            rtuLen++;
-            MB_TimerReload();
+        break;
+
+    /**
+     * We are currently receiving a frame. Reset the timer after
+     * every character received. If more than the maximum possible
+     * number of bytes in a modbus frame is received the frame is
+     * ignored.
+     */
+    case MB_RX_RCV:
+        /*Padding data byte by byte into a data frame buffer*/
+        if (rtu_len < RTU_BUF_MAX) {
+            rtu_buf[rtu_len] = byte;
+            rtu_len++;
+            mb_timer_reload();
+        } else {
+            mb_rx_state = MB_RX_ERR;
+            mb_timer_reload();
         }
+        break;
     }
 }
 
-unsigned char MB_RtuFrameValid()
+/**
+ * Get the redundancy verify value in the data, 
+ * judge whether the received data frame is incorrect (valid).
+ * @return Data frame verification result.
+ */
+uint8_t mb_rtu_frame_valid()
 {
-    unsigned short _crc16 = 0xFFFF;
+    uint16_t _crc16 = 0xFFFF;
 
-    if (rtuLen >= RTU_BUF_MIN) {
-        _crc16 = crc16(rtuBuf, rtuLen);
+    if (rtu_len >= RTU_BUF_MIN) {
+        _crc16 = crc16(rtu_buf, rtu_len);
         if (_crc16 == 0x0000)
             return true;
     }
     return false;
 }
 
-unsigned char MB_RtuSlaveAddrValid()
+/**
+ * Whether the slave device address specified by the main device is the address of this device, 
+ * If the device address is processed for the data frame request.
+ * @return The result of a match.
+ */
+uint8_t mb_rtu_slave_addr_valid()
 {
-    unsigned char addr = rtuBuf[SLAVE_ADDR_INDEX];
+    uint8_t addr = rtu_buf[SLAVE_ADDR_INDEX];
 
-    if ((addr == initSlaveAddr) || (addr == BROADCAST_ADDRESS)) {
-        recvSlaveAddr = addr;
+    if ((addr == init_slave_addr) || 
+        (addr == BROADCAST_ADDRESS)
+    ) {
+        recv_slave_addr = addr;
         return true;
     }
     return false;
 }
 
-unsigned char MB_RtuReadSlaveAddr()
+/**
+ * Extracts the slave device address contained in 
+ * the data frame sent by the master device.
+ * @return slave device address.
+ */
+uint8_t mb_rtu_read_slave_addr()
 {
-    return recvSlaveAddr;
+    return recv_slave_addr;
 }
 
-void MB_RtuReadPduDataFrame()
+/**
+ * Extract the PDU message and function code to be executed 
+ * from the complete data frame sent by the main device.
+ */
+void mb_rtu_read_pdu_data_frame()
 {
-    dataLen = rtuLen - SLAVE_ADDR_BYTE_SIZE - CRC_BYTE_SIZE - FUNCODE_BYTE_SIZE;
-    recvFunCode = rtuBuf[FUN_CODE_INDEX];
-    memcpy(pduData, &rtuBuf[PDU_DATA_INDEX], dataLen);
+    data_len = rtu_len;
+
+    data_len -= SLAVE_ADDR_BYTE_SIZE;
+    data_len -= CRC_BYTE_SIZE;
+    data_len -= FUNCODE_BYTE_SIZE;
+
+    recv_fun_code = \
+        rtu_buf[FUN_CODE_INDEX];
+
+    memcpy(pdu_data, 
+        &rtu_buf[PDU_DATA_INDEX], 
+        data_len);
 }
 
-unsigned char MB_RtuReadPduFunCode()
+/**
+ * Extract the function code to be executed.
+ */
+uint8_t mb_rtu_read_pdu_fun_code()
 {
-    return recvFunCode;
+    return recv_fun_code;
 }
 
-void MB_RtuPduFieldDeal()
+/**
+ * The complete parsing of the data frame sent by the main device, 
+ * and processing of the request of the main device, 
+ * the function placed in a main loop repeated execution.
+ */
+void mb_rtu_pdu_field_deal()
 {
-    if (mbState != MB_STATE_RECEIVEED)
-        return;
+    /*Check if the protocol stack is ready.*/
+    if (mb_task == MB_END) return;
 
-    if ((MB_RtuFrameValid()) && (MB_RtuSlaveAddrValid())) {
+    uint8_t valid = 0;
+    uint8_t _valid = 0;
+    uint8_t code = 0;
 
-        MB_RtuReadPduDataFrame();
+    switch (mb_task) {
+    case MB_READY:
+        break;
+    case MB_FRAME_RECEIVED:
+        valid = mb_rtu_slave_addr_valid();
+        _valid = mb_rtu_frame_valid();
+        code = mb_rtu_read_pdu_fun_code();
 
-        MB_RtuFunHandlers(MB_RtuReadPduFunCode(), pduData, &dataLen);
-        MB_RtuBuildSendFrames(pduData, dataLen);
-        MB_RtuSendBytes(rtuBuf, rtuLen);
+        if ((_valid) && (valid)) {
+            mb_rtu_read_pdu_data_frame();
+            mb_task = MB_EXECUTE;
+        } else {
+            rtu_len = 0;
+            mb_rx_state = MB_RX_IDLE;
+        }
+        break;
+    case MB_EXECUTE:
+        mb_rtu_fun_handlers(
+            code, pdu_data, 
+            &data_len);
 
-        mbState = MB_STATE_IDLE;
-        rtuLen = 0;
-    } else {
-        mbState = MB_STATE_IDLE;
-        rtuLen = 0;
+        mb_rtu_build_send_frames(
+            pdu_data, data_len);
+
+        mb_task = MB_FRAME_SENT;
+        break;
+    case MB_FRAME_SENT:
+        mb_rtu_send_bytes(
+            rtu_buf, rtu_len);
+
+        mb_tx_state = MB_TX_IDLE;
+
+        rtu_len = 0;
+        mb_rx_state = MB_RX_IDLE;
+
+        mb_task = MB_END;
+        break;
+
+    case MB_END:
+        break;
     }
 }
 
-#define FUN_HANDLER_MAX 5
+/*Defines the number of operational interfaces*/
+#define FUN_HANDLER_MAX 5U
 
-typedef MB_ExceptionTypeDef (*pduDatahandle)(unsigned char * pduDataFrame, unsigned short * pduDataLen);
-
+/**
+ * The construct protocol request actually handles the interface object.
+ * Function code and operational interface.
+ */
 typedef struct {
-    unsigned char funCode;
-    pduDatahandle handle;
-} MB_PduDataHandleTypeDef;
+    uint8_t fun_code;
+    req_opi_t req_opi;
+} mb_req_ll_t;
 
-MB_PduDataHandleTypeDef pduDataHandles[FUN_HANDLER_MAX] = {
-    {0x03, MB_RtuReadRegData},
-    {0x06, MB_RtuWriteRegData},
+
+/**
+ * The actual function processing/operation interface is added here, 
+ * pay attention to the proper use of Modbus standard function code, 
+ * comply with the industry-wide function code allocation standards.
+ */
+static mb_req_ll_t 
+req_lls[FUN_HANDLER_MAX] = {
+    {0x03, mb_rtu_read_reg_data},
+    {0x06, mb_rtu_write_reg_data},
 };
 
-void MB_RtuFunHandlers(unsigned char funCode, unsigned char * pduDataFrame, unsigned short * pduDataLen)
+/**
+ * The slave device performs the corresponding request according 
+ * to the function code specified by the master device.
+ * @param pdu_data_frame_p Points to an area of the cached data frame 
+ * that belongs to the receiving and sending shared space.
+ * @param pdu_data_len This parameter describes the number of 
+ * bytes in the frame of data received or to be sent.
+ * @param fun_code function code specified by the master device.
+ */
+void mb_rtu_fun_handlers(uint8_t fun_code, 
+    uint8_t * pdu_data_frame_p, 
+    uint16_t * pdu_data_len)
 {
-    MB_ExceptionTypeDef mbExcept = MB_EX_NONE;
-    for (unsigned char i = 0; i < FUN_HANDLER_MAX; i++) {
-        if (funCode == pduDataHandles[i].funCode) {
-            mbExcept = pduDataHandles[i].handle(pduDataFrame, pduDataLen);
+    mb_res_t mb_res = MB_RES_NONE;
+
+    for (uint8_t i = 0; i < FUN_HANDLER_MAX; i++) {
+
+        uint8_t _fun_code = \
+            req_lls[i].fun_code;
+
+        if (_fun_code == fun_code) {
+            mb_res = req_lls[i]\
+                .req_opi(pdu_data_frame_p, 
+                    pdu_data_len);
+            break;
+        } 
+        else 
+        /*No more function handlers registered. Abort.*/
+        if (!_fun_code) {
             break;
         }
     }
 
-    if (mbExcept != MB_EX_NONE) {
-        recvFunCode = recvFunCode | (0x01 << 7);
-        (*pduDataLen) = 0;
-        pduDataFrame[*pduDataLen] = mbExcept;
-        (*pduDataLen) = 1;
+    /* If the request was not sent to the broadcast address we
+     * return a reply.*/
+    if (recv_slave_addr != BROADCAST_ADDRESS)
+    {
+        /*An exception occured. Build an error frame.*/
+        if (mb_res != MB_RES_NONE) {
+            recv_fun_code = \
+                recv_fun_code | (0x01 << 7);
+            (*pdu_data_len) = 0;
+
+            pdu_data_frame_p[*pdu_data_len] = mb_res;
+            (*pdu_data_len) = 1;
+        }
     }
 }
 
-void MB_RtuBuildSendFrames(unsigned char * pduDataFrame, unsigned short pduDataLen)
+/**
+ * After the request is processed from the equipment, 
+ * a standard message is constructed according to the corresponding data 
+ * required by the main equipment to reply to the request of the main equipment.
+ * @param pdu_data_frame_p Points to an area of the cached data frame 
+ * that belongs to the receiving and sending shared space.
+ * @param pdu_data_len This parameter describes the number of 
+ * bytes in the frame of data received or to be sent.
+ */
+void mb_rtu_build_send_frames(uint8_t * pdu_data_frame_p, 
+    uint16_t pdu_data_len)
 {
-    unsigned short _crc16 = 0x0000;
+    uint16_t _crc16 = 0x0000;
 
-    rtuLen = 0;
+    /**
+     * Check if the receiver is still in idle state. If not we where to
+     * slow with processing the received frame and the master sent another
+     * frame on the network. We have to abort sending the frame.
+     */
+    if (mb_rx_state != MB_RX_IDLE) return;
 
-    rtuBuf[rtuLen] = MB_RtuReadSlaveAddr();
-    rtuLen += 1;
-    rtuBuf[rtuLen] = MB_RtuReadPduFunCode();
-    rtuLen += 1;
+    rtu_len = 0;
 
-    if ((pduDataLen + 4) < RTU_BUF_MAX) {
-        memcpy(&rtuBuf[rtuLen], pduDataFrame, pduDataLen);
-        rtuLen += pduDataLen;
+    /*First byte before the Modbus-PDU is the slave address.*/
+    rtu_buf[rtu_len] = \
+        mb_rtu_read_slave_addr();
+    rtu_len += 1;
+
+    rtu_buf[rtu_len] = \
+        mb_rtu_read_pdu_fun_code();
+    rtu_len += 1;
+
+    if ((pdu_data_len + 4) < RTU_BUF_MAX) {
+        memcpy(&rtu_buf[rtu_len], 
+            pdu_data_frame_p, 
+            pdu_data_len);
+        rtu_len += pdu_data_len;
     }
 
-    _crc16 = crc16(rtuBuf, rtuLen);
-    rtuBuf[rtuLen] = (unsigned char)(_crc16 & 0xFF);
-    rtuLen += 1;
-    rtuBuf[rtuLen] = (unsigned char)(_crc16 >> 8);
-    rtuLen += 1;
+    /*Calculate CRC16 checksum for Modbus-Serial-Line-PDU.*/
+    _crc16 = crc16(rtu_buf, rtu_len);
+
+    rtu_buf[rtu_len] = \
+        (uint8_t)(_crc16 & 0xFF);
+    rtu_len += 1;
+
+    rtu_buf[rtu_len] = \
+        (uint8_t)(_crc16 >> 8);
+    rtu_len += 1;
+
+    /*Activate the transmitter.*/
+    mb_tx_state = MB_TX_XMIT;
+}
+
+/**
+ * Modbus protocol 3.5 character frame interval time realization, 
+ * through the frame interval time break frame.
+ * This function is placed in a timed interrupt to execute.
+ */
+void mb_rtu_T35_expired()
+{
+    /*The packet frame interval is up 
+    and the bus status update begins*/
+
+    switch (mb_rx_state) {
+    /* Timer t35 expired. Startup phase is finished. */
+    case MB_RX_INIT:
+        mb_rx_state = MB_RX_IDLE;
+        mb_task = MB_READY;
+        break;
+    /* A frame was received and t35 expired. Notify the listener that
+     * a new frame was received.*/
+    case MB_RX_RCV:
+        mb_rx_state = MB_RX_END;
+        mb_task = MB_FRAME_RECEIVED;
+        break;
+    /* An error occured while receiving the frame. */
+    case MB_RX_ERR:
+        break;
+    }
+
+    /*The execution here shows that the 3.5 frame interval time is up, 
+    indicating the end of one frame of data*/
+    mb_rx_state = MB_RX_IDLE;
 }
