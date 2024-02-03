@@ -43,7 +43,7 @@ static uint16_t data_len = 0;
 
 static mb_rx_state_t mb_rx_state = MB_RX_INIT;
 static mb_tx_state_t mb_tx_state = MB_TX_IDLE;
-static mb_task_t mb_task = 0xFF;
+static mb_task_t mb_task = MB_READY;
 
 /**********************
  *      TYPEDEFS
@@ -73,6 +73,35 @@ void mb_rtu_mode_init(uint8_t slave_addr,
 
     mb_rx_state = MB_RX_INIT;
     mb_timer_enable();
+
+    /*Modbus RTU uses 8 Databits.*/
+}
+
+/**
+ * Initially the receiver is in the state STATE_RX_INIT. we start
+ * the timer and if no character is received within t3.5 we change
+ * to STATE_RX_IDLE. This makes sure that we delay startup of the
+ * modbus protocol stack until the bus is free.
+ */
+void mb_rtu_start()
+{
+    mb_rx_state = MB_RX_INIT;
+    mb_tx_state = MB_TX_IDLE;
+    mb_timer_enable();
+}
+
+/**
+ * Initially the receiver is in the state MB_RX_IDLE. we start
+ * the timer and if no character is received within t3.5 we change
+ * to STATE_RX_IDLE. This makes sure that we delay startup of the
+ * modbus protocol stack until the bus is free.
+ */
+void mb_rtu_stop()
+{
+    mb_timer_disable();
+    mb_rx_state = MB_RX_IDLE;
+    mb_tx_state = MB_TX_IDLE;
+    mb_task = MB_END;
 }
 
 /**
@@ -104,7 +133,8 @@ void mb_rtu_send_bytes(uint8_t * data_p, uint16_t len)
 
 /**
  * The underlying interface of Modbus protocol data receiving is realized, 
- * which is used in the interrupt of serial interface data receiving.
+ * which is used in the interrupt of serial interface data receiving,
+ * always read the character.
  * @param byte Padding data byte by byte into a data frame buffer.
  */
 void mb_rtu_recv_bytes(uint8_t byte)
@@ -174,6 +204,8 @@ uint8_t mb_rtu_frame_valid()
 {
     uint16_t _crc16 = 0xFFFF;
 
+    assert(rtu_len < RTU_BUF_MAX);
+
     if (rtu_len >= RTU_BUF_MIN) {
         _crc16 = crc16(rtu_buf, rtu_len);
         if (_crc16 == 0x0000)
@@ -194,6 +226,9 @@ uint8_t mb_rtu_slave_addr_valid()
     if ((addr == init_slave_addr) || 
         (addr == BROADCAST_ADDRESS)
     ) {
+        /* Save the address field. All frames are passed to the upper layed
+         * and the decision if a frame is used is done there.
+         */
         recv_slave_addr = addr;
         return true;
     }
@@ -218,6 +253,9 @@ void mb_rtu_read_pdu_data_frame()
 {
     data_len = rtu_len;
 
+    /*Total length of Modbus-PDU 'Data field' 
+    is Modbus-Serial-Line-PDU minus size of address field 
+    and CRC checksum, fun code.*/
     data_len -= SLAVE_ADDR_BYTE_SIZE;
     data_len -= CRC_BYTE_SIZE;
     data_len -= FUNCODE_BYTE_SIZE;
@@ -255,12 +293,16 @@ void mb_rtu_pdu_field_deal()
     switch (mb_task) {
     case MB_READY:
         break;
-    case MB_FRAME_RECEIVED:
-        valid = mb_rtu_slave_addr_valid();
-        _valid = mb_rtu_frame_valid();
-        code = mb_rtu_read_pdu_fun_code();
 
-        if ((_valid) && (valid)) {
+    case MB_FRAME_RECEIVED:
+
+        /*Length and CRC check*/
+        valid = mb_rtu_frame_valid();
+
+        /*Check if the frame is for us. If not ignore the frame.*/
+        _valid = mb_rtu_slave_addr_valid();
+
+        if ((valid) && (_valid)) {
             mb_rtu_read_pdu_data_frame();
             mb_task = MB_EXECUTE;
         } else {
@@ -268,7 +310,10 @@ void mb_rtu_pdu_field_deal()
             mb_rx_state = MB_RX_IDLE;
         }
         break;
+
     case MB_EXECUTE:
+        code = mb_rtu_read_pdu_fun_code();
+
         mb_rtu_fun_handlers(
             code, pdu_data, 
             &data_len);
@@ -278,6 +323,7 @@ void mb_rtu_pdu_field_deal()
 
         mb_task = MB_FRAME_SENT;
         break;
+
     case MB_FRAME_SENT:
         mb_rtu_send_bytes(
             rtu_buf, rtu_len);

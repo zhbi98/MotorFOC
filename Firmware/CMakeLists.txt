@@ -50,6 +50,7 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/drivers/CMSIS/Device/ST/STM32F4xx/Include
     ${CMAKE_SOURCE_DIR}/drivers/STM32F4xx_HAL_Driver/Inc
     ${CMAKE_SOURCE_DIR}/drivers/STM32F4xx_HAL_Driver/Inc/Legacy
+    ${CMAKE_SOURCE_DIR}/core
     ${CMAKE_SOURCE_DIR}/main
     ${CMAKE_SOURCE_DIR}/modbus
     ${CMAKE_SOURCE_DIR}/utils
@@ -58,6 +59,7 @@ add_definitions(-DUSE_HAL_DRIVER -D__MICROLIB -DSTM32F4 -DSTM32F4xx -DSTM32F405x
 
 aux_source_directory(${CMAKE_SOURCE_DIR}/drivers/STM32F4xx_HAL_Driver/Src HAL_DRIVER)
 aux_source_directory(${CMAKE_SOURCE_DIR}/drivers/CMSIS/Device/ST/STM32F4xx/Source/Templates SYSTEM)
+aux_source_directory(${CMAKE_SOURCE_DIR}/core CORE)
 aux_source_directory(${CMAKE_SOURCE_DIR}/main MAIN)
 aux_source_directory(${CMAKE_SOURCE_DIR}/modbus MODBUS)
 aux_source_directory(${CMAKE_SOURCE_DIR}/utils UTILS)
@@ -69,7 +71,7 @@ add_link_options(-Wl,-gc-sections,--print-memory-usage,-Map=${PROJECT_BINARY_DIR
 add_link_options(-mcpu=cortex-m4 -mthumb -mthumb-interwork)
 add_link_options(-T ${LINKER_SCRIPT})
 
-add_executable(${PROJECT_NAME}.elf ${HAL_DRIVER} ${SYSTEM} ${MAIN} ${MODBUS} ${STARTUP} ${UTILS} ${LINKER_SCRIPT})
+add_executable(${PROJECT_NAME}.elf ${HAL_DRIVER} ${SYSTEM} ${CORE} ${MAIN} ${MODBUS} ${STARTUP} ${UTILS} ${LINKER_SCRIPT})
 
 set(HEX_FILE ${PROJECT_BINARY_DIR}/${PROJECT_NAME}.hex)
 set(BIN_FILE ${PROJECT_BINARY_DIR}/${PROJECT_NAME}.bin)

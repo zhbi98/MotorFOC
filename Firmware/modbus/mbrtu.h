@@ -61,7 +61,7 @@
  *      TYPEDEFS
  **********************/
 
-/**Description of a linked list*/
+/**Protocol Stack Controller receive state*/
 enum {
     MB_RX_INIT = 0,
     MB_RX_IDLE,
@@ -72,6 +72,7 @@ enum {
 
 typedef uint8_t mb_rx_state_t;
 
+/**Protocol Stack Controller transfer state*/
 enum {
     MB_TX_IDLE = 0, /**< Transmitter is in idle state*/
     MB_TX_XMIT /**< Transmitter is in transfer state*/
@@ -79,6 +80,7 @@ enum {
 
 typedef uint8_t mb_tx_state_t;
 
+/**Protocol Stack Controller task type*/
 enum {
     MB_READY = 0,      /**< Startup finished.*/
     MB_FRAME_RECEIVED, /**< Frame received.*/
@@ -94,6 +96,8 @@ typedef uint8_t mb_task_t;
  **********************/
 
 void mb_rtu_mode_init(uint8_t slave_addr, uint32_t baud_rate);
+void mb_rtu_start();
+void mb_rtu_stop();
 bool mb_rtu_set_slave_addr(uint8_t slave_addr);
 void mb_rtu_send_bytes(uint8_t * data_p, uint16_t len);
 void mb_rtu_recv_bytes(uint8_t byte);
