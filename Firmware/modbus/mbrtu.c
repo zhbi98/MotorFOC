@@ -49,7 +49,14 @@ static mb_task_t mb_task = MB_READY;
  *      TYPEDEFS
  **********************/
 
-typedef mb_res_t (*req_opi_t)(uint8_t * pdu_data_frame_p, uint16_t * pdu_data_len);
+/**
+ * The construct protocol request actually handles the interface object.
+ * Function code and operational interface.
+ */
+typedef struct {
+    uint8_t fun_code;
+    req_opi_t req_opi;
+} mb_req_ll_t;
 
 /**********************
  *   GLOBAL FUNCTIONS
@@ -345,25 +352,34 @@ void mb_rtu_pdu_field_deal()
 #define FUN_HANDLER_MAX 5U
 
 /**
- * The construct protocol request actually handles the interface object.
- * Function code and operational interface.
- */
-typedef struct {
-    uint8_t fun_code;
-    req_opi_t req_opi;
-} mb_req_ll_t;
-
-
-/**
  * The actual function processing/operation interface is added here, 
  * pay attention to the proper use of Modbus standard function code, 
  * comply with the industry-wide function code allocation standards.
  */
-static mb_req_ll_t 
-req_lls[FUN_HANDLER_MAX] = {
-    {0x03, mb_rtu_read_reg_data},
-    {0x06, mb_rtu_write_reg_data},
-};
+static mb_req_ll_t req_lls[FUN_HANDLER_MAX] = {0};
+static uint8_t req_cnt = 0;
+
+/**
+ * Add a actual operation callback function to the callback list.
+ * @param _code The interval between callback functions being executed.
+ * @param req_p pointer to a task callback function.
+ * @return The result of a match.
+ */
+bool _mb_rtu_xcall_register(const uint8_t _code, req_opi_t req_p)
+{
+    while ((req_lls[req_cnt].req_opi != NULL) && 
+        (req_cnt < FUN_HANDLER_MAX)) req_cnt++;
+
+    if (req_cnt > FUN_HANDLER_MAX) return false;
+
+    req_lls[req_cnt].req_opi = req_p;
+    req_lls[req_cnt].fun_code = _code;
+
+    return true;
+}
+
+/*_mb_rtu_xcall_register(0x03, mb_rtu_read_reg_data);*/
+/*_mb_rtu_xcall_register(0x10, mb_rtu_write_reg_data);*/
 
 /**
  * The slave device performs the corresponding request according 

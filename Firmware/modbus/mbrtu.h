@@ -61,6 +61,9 @@
  *      TYPEDEFS
  **********************/
 
+typedef mb_res_t (*req_opi_t)(uint8_t * pdu_data_frame_p, 
+    uint16_t * pdu_data_len);
+
 /**Protocol Stack Controller receive state*/
 enum {
     MB_RX_INIT = 0,
@@ -107,6 +110,7 @@ uint8_t mb_rtu_read_slave_addr();
 void mb_rtu_read_pdu_data_frame();
 uint8_t mb_rtu_read_pdu_fun_code();
 void mb_rtu_pdu_field_deal();
+bool _mb_rtu_xcall_register(const uint8_t _code, req_opi_t req_p);
 void mb_rtu_fun_handlers(uint8_t fun_code, uint8_t * pdu_data_frame_p, uint16_t * pdu_data_len);
 void mb_rtu_build_send_frames(uint8_t * pdu_data_frame, uint16_t pdu_data_len);
 void mb_rtu_T35_expired();

@@ -11,7 +11,6 @@
  *********************/
 
 #include <stdint.h>
-#include "mbrtu.h"
 
 /**********************
  *      TYPEDEFS

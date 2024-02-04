@@ -61,14 +61,19 @@ mb_res_t mb_rtu_read_reg_data(
 
     /*1data = 2bytes*/
     pdu_data_frame_p[*pdu_data_len] = read_num * 2;
-    (*pdu_data_len) += 1;
+    (*pdu_data_len) += 1; /*Offsset 1 byte*/
 
-    return mb_rtu_read_data(
+    mb_res_t res = mb_rtu_read_data(
         pdu_data_frame_p, 
         pdu_data_len, 
         read_addr, 
         read_num
     );
+
+    if (res == MB_RES_NONE)
+        *pdu_data_len = read_num * 2 + 1; /*data byte num + data num * 2*/
+
+    return res;
 }
 
 /**
@@ -124,14 +129,25 @@ mb_res_t mb_rtu_write_reg_data(uint8_t * pdu_data_frame_p,
     uint16_t * pdu_data_len)
 {
     uint16_t write_addr = 0;
-    uint16_t write_num = 1;
+    uint16_t write_num = 0;
+    uint8_t byte_cnt = 0;
 
     write_addr =  (pdu_data_frame_p[0] << 8);
     write_addr |= (pdu_data_frame_p[1] << 0);
 
-    return mb_rtu_write_data(&pdu_data_frame_p[2], 
+    write_num = (uint16_t)(pdu_data_frame_p[2] << 8);
+    write_num |= (uint16_t)(pdu_data_frame_p[3]);
+
+    byte_cnt = (uint8_t)(pdu_data_frame_p[4]); /*write_num * 2*/
+
+    mb_res_t res = mb_rtu_write_data(&pdu_data_frame_p[5], 
         pdu_data_len, write_addr, 
         write_num);
+
+    if (res == MB_RES_NONE)
+        *pdu_data_len = 4; /*Address + write num*/
+
+    return res;
 }
 
 /**
@@ -158,10 +174,10 @@ mb_res_t mb_rtu_write_data(uint8_t * pdu_data_frame_p,
         address - REG_ADDR_START);
 
     for (uint16_t i = 0; i < num; i++) {
-        data_buf[index]  = \
-            pdu_data_frame_p[i + 0] << 8;
-        data_buf[index] |= \
-            pdu_data_frame_p[i + 1] << 0;
+        data_buf[index + i]  = \
+            pdu_data_frame_p[i * 2 + 0] << 8;
+        data_buf[index + i] |= \
+            pdu_data_frame_p[i * 2 + 1] << 0;
     }
 
 #if 0 /*Example*/
