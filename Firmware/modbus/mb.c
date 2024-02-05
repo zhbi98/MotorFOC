@@ -20,15 +20,27 @@
  *  STATIC VARIABLES
  **********************/
 
-static uint16_t data_buf[REG_COUNT] = {
-    1900, 1901, 1902, 1903, 1904, 
-    1905, 1906, 1907, 1908, 1909, 
-    1910, 1911, 1912, 1913, 1914, 
-    1915, 1916, 1917, 1918, 1919,
-    1920, 1921, 1922, 1923, 1924, 
-    1925, 1926, 1927, 1928, 1929, 
-    1930, 1931, 1932, 1933, 1934, 
-    1935, 1936, 1937, 1938, 1939,
+static uint16_t hello_1 = 1900;
+static uint16_t hello_2 = 1902;
+
+/**
+ * Note that the Modbus RTU protocol uses 16-bit data transmission 
+ * (whether it is a read-write coil, read discrete input, 
+ * read input register, read-write hold register) , therefore, 
+ * when using Modbus protocol to transfer multiple single-byte data needs to be combined 
+ * into 16-bit (two-byte) data for transmission or storage, 
+ * while paying attention to the combined byte order (size-side mode) .
+ */
+
+static uint16_t * const data_p[REG_COUNT] = {
+    &hello_1, &hello_2, NULL, NULL, NULL, 
+    NULL, NULL, NULL, NULL, NULL, 
+    NULL, NULL, NULL, NULL, NULL, 
+    NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, 
+    NULL, NULL, NULL, NULL, NULL, 
+    NULL, NULL, NULL, NULL, NULL, 
+    NULL, NULL, NULL, NULL, NULL,
 };
 
 /**********************
@@ -104,12 +116,12 @@ mb_res_t mb_rtu_read_data(uint8_t * pdu_data_frame_p,
 
     for (uint16_t i = 0; i < num; i++) {
         pdu_data_frame_p[*pdu_data_len] = \
-            (data_buf[index + i] >> 8) & 0xFF;
+            (*data_p[index + i] >> 8) & 0xFF;
 
         (*pdu_data_len) += 1;
 
         pdu_data_frame_p[*pdu_data_len] = \
-            (data_buf[index + i] >> 0) & 0xFF;
+            (*data_p[index + i] >> 0) & 0xFF;
 
         (*pdu_data_len) += 1;
     }
@@ -174,9 +186,9 @@ mb_res_t mb_rtu_write_data(uint8_t * pdu_data_frame_p,
         address - REG_ADDR_START);
 
     for (uint16_t i = 0; i < num; i++) {
-        data_buf[index + i]  = \
+        *data_p[index + i]  = \
             pdu_data_frame_p[i * 2 + 0] << 8;
-        data_buf[index + i] |= \
+        *data_p[index + i] |= \
             pdu_data_frame_p[i * 2 + 1] << 0;
     }
 
@@ -184,7 +196,7 @@ mb_res_t mb_rtu_write_data(uint8_t * pdu_data_frame_p,
     motor_control.mode_run = \
         motor_mode_digital_speed;
     motor_control_write_goal_speed(
-        51200 * data_buf[index]); /*0.1 Cycle/s*/
+        51200 * data_p[index]); /*0.1 Cycle/s*/
 #endif /*Example*/
 
     return MB_RES_NONE;
