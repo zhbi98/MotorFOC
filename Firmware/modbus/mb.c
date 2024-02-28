@@ -43,9 +43,58 @@ static uint16_t * const data_p[REG_COUNT] = {
     NULL, NULL, NULL, NULL, NULL,
 };
 
+static uint16_t register_start_nr = 0xFFFF;
+static uint16_t register_end_nr = 0xFFFF;
+
 /**********************
  *   GLOBAL FUNCTIONS
  **********************/
+
+/**
+ * After the Modbus master device accesses the slave device register, 
+ * we can use this function to know the range of register addresses 
+ * that the Modbus master device accesses.
+ * The master device writes data into a specified register range, 
+ * through which we can turn the data into events that 
+ * perform data-binding actions
+ * @param start Points to The initial register index.
+ * @param end The Ending Register Address Index.
+ */
+void mb_rtu_reg_get_range(uint16_t * start, uint16_t * end)
+{
+    *start = register_start_nr;
+    *end = register_end_nr;
+}
+
+/**
+ * Clears events that have been handled within the address range of this register.
+ * @param start Points to The initial register index.
+ * @param end The Ending Register Address Index.
+ */
+void mb_rtu_reg_clear_range()
+{
+    register_start_nr = 0xFFFF;
+    register_end_nr = 0xFFFF;
+}
+
+/**
+ * Is the address range that produced the execution event valid, 
+ * and whether the event generated in the register address range needs to be processed.
+ * @param start Points to The initial register index.
+ * @param end The Ending Register Address Index.
+ * @return valid.
+ */
+bool mb_rtu_reg_range_valid()
+{
+    uint16_t start = register_start_nr;
+    uint16_t end = register_end_nr;
+
+    if (start == 0xFFFF || 
+        end == 0xFFFF) return false;
+    if (start > end ) return false;
+
+    return true;
+}
 
 /**
  * Reads the data contained in the specified register from the device, 
@@ -192,12 +241,14 @@ mb_res_t mb_rtu_write_data(uint8_t * pdu_data_frame_p,
             pdu_data_frame_p[i * 2 + 1] << 0;
     }
 
-#if 0 /*Example*/
-    motor_control.mode_run = \
-        motor_mode_digital_speed;
-    motor_control_write_goal_speed(
-        51200 * data_p[index]); /*0.1 Cycle/s*/
-#endif /*Example*/
+#if 0 /*Apply to motor drive*/
+    MotorDrive.mod = ModeDigitalSpeed;
+    MotorDriveWriteSpeed(
+    51200 * data_p[index]); /*60rpm*/
+#endif
+
+    register_start_nr = index;
+    register_end_nr = index + num;
 
     return MB_RES_NONE;
 }

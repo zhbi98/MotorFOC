@@ -10,13 +10,13 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "main.h"
+#include "stm32.h"
 
 /**********************
  *  STATIC PROTOTYPES
  **********************/
 
 static void SystemClock_Config(void);
-static void Error_Handler(void);
 
 /**********************
  *   GLOBAL FUNCTIONS
@@ -28,8 +28,14 @@ static void Error_Handler(void);
  */
 int32_t main()
 {
+  /*Reset of all peripherals, Initializes the Flash interface and the Systick.*/
   HAL_Init();
+
+  /*Configure the system clock*/
   SystemClock_Config();
+
+  /*Initialize all configured peripherals*/
+  stm32_init();
 
   for (;;) {
 
@@ -98,13 +104,16 @@ static void SystemClock_Config(void)
 }
 
 /**
- * This function is executed in case of error occurrence.
+ * @brief  This function is executed in case of error occurrence.
+ * @retval None
  */
-static void Error_Handler(void)
+void Error_Handler(void)
 {
-  /*Turn LED5 on*/
-  /*BSP_LED_On(LED5);*/
-  while(1)
-  {
-  }
+  /* USER CODE BEGIN Error_Handler_Debug */
+    /* User can add his own implementation to report the HAL error return state */
+    __disable_irq();
+    while (1)
+    {
+    }
+  /* USER CODE END Error_Handler_Debug */
 }

@@ -16,4 +16,6 @@
  * GLOBAL PROTOTYPES
  **********************/
 
+void Error_Handler(void);
+
 #endif /*__MAIN_H__*/

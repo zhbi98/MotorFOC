@@ -79,7 +79,7 @@ void MX_SPI3_Init(void)
   hspi3.Init.CRCPolynomial = 10;
   if (HAL_SPI_Init(&hspi3) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    Error_Handler();
   }
 
 }
@@ -134,7 +134,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* spiHandle)
     hdma_spi3_tx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
     if (HAL_DMA_Init(&hdma_spi3_tx) != HAL_OK)
     {
-      _Error_Handler(__FILE__, __LINE__);
+      Error_Handler();
     }
 
     __HAL_LINKDMA(spiHandle,hdmatx,hdma_spi3_tx);
@@ -157,7 +157,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* spiHandle)
     hdma_spi3_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
     if (HAL_DMA_Init(&hdma_spi3_rx) != HAL_OK)
     {
-      _Error_Handler(__FILE__, __LINE__);
+      Error_Handler();
     }
 
     __HAL_LINKDMA(spiHandle,hdmarx,hdma_spi3_rx);

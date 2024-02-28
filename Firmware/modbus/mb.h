@@ -11,6 +11,7 @@
  *********************/
 
 #include <stdint.h>
+#include <stdio.h>
 
 /**********************
  *      TYPEDEFS
@@ -49,5 +50,8 @@ mb_res_t mb_rtu_write_reg_data(uint8_t * pdu_data_frame_p,
 mb_res_t mb_rtu_write_data(uint8_t * pdu_data_frame_p, 
     uint16_t * pdu_data_len, uint16_t address, 
     uint16_t num);
+void mb_rtu_reg_get_range(uint16_t * start, uint16_t * end);
+void mb_rtu_reg_clear_range();
+bool mb_rtu_reg_range_valid();
 
 #endif /*__MB_H__*/

@@ -314,6 +314,7 @@ void mb_rtu_pdu_field_deal()
             mb_task = MB_EXECUTE;
         } else {
             rtu_len = 0;
+            mb_task = MB_END;
             mb_rx_state = MB_RX_IDLE;
         }
         break;
