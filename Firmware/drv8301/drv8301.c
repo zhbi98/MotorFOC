@@ -15,9 +15,9 @@
  *  STATIC VARIABLES
  **********************/
 
-uint16_t tx_buf = 0xFFFF, rx_buf = 0xFFFF;
+volatile uint16_t tx_buf = 0xFFFF, rx_buf = 0xFFFF;
+volatile static uint8_t spi_tran_ret = 0xFF;
 static md_drv8301_t * act_drv_p = NULL;
-static uint8_t spi_ret = 0xFF;
 
 /**********************
  *  STATIC PROTOTYPES
@@ -42,15 +42,16 @@ static bool md_drv8301_spi_start(md_drv8301_t * drv8301_p,
     const uint8_t * tx_buf, uint8_t * rx_buf, 
     size_t length)
 {
-    HAL_DMA_StateTypeDef _dma = hspi3.hdmatx->State;
+    HAL_DMA_StateTypeDef rdma = hspi3.hdmarx->State;
+    HAL_DMA_StateTypeDef tdma = hspi3.hdmatx->State;
     HAL_StatusTypeDef status = HAL_ERROR;
 
     drv8301_p->pin_cs.setval(false);
 
     /*This can happen if the DMA or interrupt 
     priorities are not configured properly.*/
-    if (_dma != HAL_DMA_STATE_READY || 
-        _dma != HAL_DMA_STATE_READY) {
+    if (rdma != HAL_DMA_STATE_READY || 
+        tdma != HAL_DMA_STATE_READY) {
         status = HAL_BUSY;
     } else if (tx_buf && rx_buf) {
         status = HAL_SPI_TransmitReceive_DMA(
@@ -86,8 +87,10 @@ void md_drv8301_spi_transfer_async(md_drv8301_t * drv8301_p,
     bool res = md_drv8301_spi_start(drv8301_p, 
         tx_buf, rx_buf, length);
 
-    if (!res) spi_ret = false;
-    else spi_ret = true;
+    if (!res) spi_tran_ret = false;
+    /*Note that the complete interrupt must be 
+    sent by the SPI to set the state to true*/
+    /*else spi_tran_ret = true;*/
 }
 
 /**
@@ -101,16 +104,16 @@ bool md_drv8301_spi_transfer(md_drv8301_t * drv8301_p,
     const uint8_t* tx_buf, uint8_t* rx_buf, 
     size_t length, uint32_t timeout_ms)
 {
-    spi_ret = 0xFF;
+    spi_tran_ret = 0xFF;
     act_drv_p = drv8301_p;
 
     md_drv8301_spi_transfer_async(drv8301_p, 
         tx_buf, rx_buf, length);
 
     /*Wait for the conversion to complete*/
-    while (spi_ret == 0xFF) {}
+    while (spi_tran_ret == 0xFF) {sleep_us(1);}
 
-    return spi_ret;
+    return spi_tran_ret;
 }
 
 /**
@@ -119,8 +122,10 @@ bool md_drv8301_spi_transfer(md_drv8301_t * drv8301_p,
  */
 void md_drv8301_spi_transfer_end()
 {
+    /*The data is sent, cancel the DRV8301 chip selection*/
     act_drv_p->pin_cs.setval(true);
-    spi_ret = true;
+    /*The data is sent and the state is set to true*/
+    spi_tran_ret = true;
 }
 
 /**
@@ -147,7 +152,7 @@ bool md_drv8301_register_config(md_drv8301_t * drv8301_p,
     uint16_t kgain_idx = 3;
 
     /**
-     * for reference:
+     * For reference:
      * 20V/V on 500uOhm gives a range of +/- 150A
      * 40V/V on 500uOhm gives a range of +/- 75A
      * 20V/V on 666uOhm gives a range of +/- 110A
