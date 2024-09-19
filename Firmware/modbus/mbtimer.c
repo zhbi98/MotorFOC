@@ -69,8 +69,12 @@ void mb_timer_tick_callback()
 
     /*A frame of data received, off the timer, 
     ready to process the data*/
-    tick50us_val--;
-
+    if (tick50us_val > 0)
+        tick50us_val--;
+    /*If the counter is an unsigned number, 
+    you need to use judgement, otherwise it is 
+    easy to have an abnormal negative value*/
+    
     if (tick50us_val > 0) return;
 
     /*tick50us_val = MB_TIMEOUT_INVALID;*/
