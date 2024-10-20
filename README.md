@@ -24,6 +24,6 @@
 
 我将 ODrive 的固件（驱动程序）适配到了 MotorKit 套件，简化了 ODrive 的文件组织方式，方便理解代码，并且将 ODrive 复杂的编译方式改成使用 CMake 进行构建，并且可以搭配 VSCode 进行图形化调试，这有利于理解 ODrive 的程序
 
-基于 ODrive V5.6 改版的 MotorKit 固件: https://github.com/zhbi98/ODrive，直接烧录到 MotorKit 就可以运行。
+基于 ODrive V5.6 改版的 MotorKit 固件，直接烧录到 MotorKit 就可以运行: https://github.com/zhbi98/ODrive
 
 如果没有 VSCode 的嵌入式开发环境，可以看看这篇文章：https://blog.csdn.net/jf_52001760/article/details/126826393
