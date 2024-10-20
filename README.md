@@ -19,3 +19,11 @@
 配套的 AS5047 高精度 14 bit，高速 20K RPM 磁编码器模块，模块用于改装配套大疆精灵 3 拆机无刷电机 2312S，模块可以在淘宝搜索购买。
 
 ![image.png](./Image/20240223214634.jpg)
+
+# 固件
+
+我将 ODrive 的固件（驱动程序）适配到了 MotorKit 套件，简化了 ODrive 的文件组织方式，方便理解代码，并且将 ODrive 复杂的编译方式改成使用 CMake 进行构建，并且可以搭配 VSCode 进行图形化调试，这有利于理解 ODrive 的程序
+
+基于 ODrive V5.6 改版的 MotorKit 固件: https://github.com/zhbi98/ODrive，直接烧录到 MotorKit 就可以运行。
+
+如果没有 VSCode 的嵌入式开发环境，可以看看这篇文章：https://blog.csdn.net/jf_52001760/article/details/126826393
